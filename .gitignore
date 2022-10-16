@@ -1,2 +1,5 @@
 /pipe
 /fifo
+/queue_chat
+/mqd/binar
+/mqd/object
