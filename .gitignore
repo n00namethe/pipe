@@ -1,2 +1,4 @@
-/pipe
+/pipe/build
 /fifo
+/mqb
+/queue_chat
