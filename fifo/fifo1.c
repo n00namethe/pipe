@@ -12,7 +12,7 @@ int main()
 {
     char buf[100];
     int fd_fifo = open("file.buf", O_RDONLY);
-    if(fd_fifo == -1)
+    if (fd_fifo == -1)
     {
         perror("Невозможно открыть fifo");
         exit(EXIT_FAILURE);

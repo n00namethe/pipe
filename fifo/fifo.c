@@ -14,14 +14,12 @@ int main()
     printf("Отправил клиенту сообщение: %s\n", buffer);
     int fd_fifo = open("file.buf", O_WRONLY | O_CREAT);
 
-    unlink("file.buf");
-
-    if(mkfifo("file.buf", S_IRWXU) == -1)
+    if (mkfifo("file.buf", S_IRWXU) == -1)
     {
         perror("Невозможно создать fifo");
         exit(EXIT_FAILURE);
     }
-    if(fd_fifo == -1)
+    if (fd_fifo == -1)
     {
         perror("Невозможно открыть fifo");
         exit(EXIT_FAILURE);
