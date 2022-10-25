@@ -15,7 +15,7 @@ server.o: server.c
 	gcc -c -o $(OBJ)/server.o server.c
 
 sender: sender.o
-	gcc -o $(BIN)/sender $(OBJ)/sender.o 
+	gcc -o $(BIN)/sender $(OBJ)/sender.o -lrt
 
 server: server.o
-	gcc -o $(BIN)/server $(OBJ)/server.o
+	gcc -o $(BIN)/server $(OBJ)/server.o -lrt

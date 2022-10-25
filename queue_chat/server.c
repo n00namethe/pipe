@@ -1,32 +1,17 @@
-#include <fcntl.h>           /* For O_* constants */
-#include <sys/stat.h>        /* For mode constants */
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <mqueue.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include "header.h"
 
-#define MESSAGE_SIZE 1024
-#define NICK_SIZE 32
-#define MQ_MAX_NUM_OF_MESSAGES 10
-#define MQ_NAME "/Queue"
-#define WAIT_MESSAGE_TIME 20
-
-typedef struct
-{
-    char msg[MESSAGE_SIZE];
-    pid_t pid;
-    char nickname[NICK_SIZE];
-} message;
+#define WAIT_MESSAGE_TIME 15
 
 int main()
 {
-    struct mq_attr attributes = 
-    {
-        .mq_flags = 0,                       
-        .mq_maxmsg = MQ_MAX_NUM_OF_MESSAGES, 
-        .mq_msgsize = sizeof(message),       
-        .mq_curmsgs = 0                      
-    };
     struct timespec timeout;
     mqd_t queue = mq_open(MQ_NAME, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR, &attributes);
     if (queue == -1)
@@ -35,6 +20,8 @@ int main()
         return -1;
     }
     message struct_to_recive;
+    memset(&struct_to_recive, 0, sizeof(message));
+    printf("я сервер мой PID: %d\n", getpid());
     printf("wait message just %d seconds\n", WAIT_MESSAGE_TIME);
     while(1)
     {
@@ -53,6 +40,7 @@ int main()
                 perror("mq_unlink not success\n");
                 return -1;
             }
+            return 0;
         }
         printf("%d %s: %s\n", struct_to_recive.pid, struct_to_recive.nickname, struct_to_recive.msg);
     }
