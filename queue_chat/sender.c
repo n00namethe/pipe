@@ -7,26 +7,35 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "header.h"
+#include <errno.h>
 
 #define EXIT_CHAR 'e'
-#define WRITE_CHAR 't'
 
-struct_service struct_to_send;
-struct_chat chat_struct;
+server_to_client_msg_t struct_to_receive;
+client_to_server_msg_t struct_to_send;
 struct timespec timeout;
+
+pid_t client_pid;
+char nickname[NICKNAME_SIZE];
+char client_queue_for_chat[CLIENT_QUEUE_SIZE];
+char pid_queue[CLIENT_QUEUE_SIZE] = {};
+char *pid_queue_ptr = &pid_queue[0];
+
+mqd_t queue_to_connect;
+mqd_t chat;
 
 mqd_t wait_connect()
 {
     printf("Я зашел в wait_connect\n");
-    mqd_t queue_to_connect = -1;
+    queue_to_connect = -1;
     while (queue_to_connect <= 0)
     {
         printf("я в цикле, жду подключения к серверу\n");
-        queue_to_connect = mq_open(SERVICE_QUEUE, O_RDWR);
+        queue_to_connect = mq_open(SERVICE_QUEUE, O_WRONLY);
         if (queue_to_connect == -1)
         {
             perror("mq_open not success\n");
-            printf("next try 3..2..1..\n");
+            printf("next try 3..2..1..\nerrno = %d\n", errno);
             sleep(3);
         }
     }
@@ -34,12 +43,15 @@ mqd_t wait_connect()
     return queue_to_connect;
 }
 
-int connect_info(mqd_t queue_to_connect, char *argv[])
+int connect_info()
 {
     printf("Я зашел в connect_info\n");
-    memset(&struct_to_send, 0 , sizeof(struct_service));
-    struct_to_send.pid = getpid();
-    memmove(&struct_to_send.nickname, argv[0], sizeof(struct_to_send.nickname));
+    memset(&struct_to_send, 0 , sizeof(struct_to_send));
+    struct_to_send.action = 0;
+    struct_to_send.sender.client_pid = client_pid;
+    memmove(&struct_to_send.sender.client_name, &nickname, sizeof(struct_to_send.sender.client_name));
+    printf("мой PID = %d\nникнейм = %s\nномер действия = %d\n",\
+            struct_to_send.sender.client_pid, struct_to_send.sender.client_name, struct_to_send.action);
     if (mq_send(queue_to_connect, (char *)&struct_to_send, sizeof(struct_to_send), PRIORITY_OF_QUEUE) == -1)
     {
         perror("mq_send connect_info not success\n");
@@ -50,79 +62,59 @@ int connect_info(mqd_t queue_to_connect, char *argv[])
     return 1;
 }
 
-int recive_new_fd(mqd_t queue_to_connect)
+void create_new_fd()
 {
-    printf("Я зашел в recive_new_fd\n");
-    int return_recieve = -1;
-    char name_chat_queue[SIZE_OF_CHAR_FD];
-    char *name_chat_queue_ptr = &name_chat_queue[0];
-    while(return_recieve == -1)
+    sprintf(pid_queue_ptr, "/User_queue_%d", client_pid);
+    printf("user_queue = %s\n", pid_queue_ptr);
+    chat = -1;
+    while (chat <= 0)
     {
-        printf("жду ФД для открытия чата\n");
-        return_recieve = mq_receive(queue_to_connect, (char *)&chat_struct, sizeof(chat_struct), NULL);
-        if (return_recieve == -1)
+        printf("я в цикле, жду подключения к чату\n");
+        chat = mq_open(pid_queue_ptr, O_RDONLY);
+        if (chat == -1)
         {
-            perror("recive_new_fd not success\n");
-            sleep(10);
+            printf("error = %d\n", errno);
+            printf("next try 3..2..1..\nerrno = %d\n", errno);
+            sleep(3);
         }
     }
-    strncpy(name_chat_queue_ptr, chat_struct.new_queue_name, sizeof(name_chat_queue[SIZE_OF_CHAR_FD]));
-    printf("new FD = %s\n", name_chat_queue_ptr);
-    strcpy(chat_struct.service_message, "New FD was received");
-    if (mq_send(queue_to_connect, (char *)&chat_struct, sizeof(chat_struct), PRIORITY_OF_QUEUE) == -1)
-    {
-        perror("mq_send recive_new_fd not success\n");
-        mq_close(queue_to_connect);
-        return -1;
-    }
-    return 1;
+    printf("Подкдючение к очереди произошло успешно, ФД: %d\n", (int)chat);
 }
 
-mqd_t connect_to_chat(char name_chat_queue)
-{
-    printf("Я зашел в connect_to_chat\n");
-    mqd_t chat_queue = mq_open(&name_chat_queue, O_RDWR);
-    if (chat_queue == -1)
-    {
-        perror("chat_queue not open\n");
-    }
-    return chat_queue;
-}
-
-void chat(mqd_t chat_queue)
+void _chat_()
 {
     printf("Я зашел в chat\n");
     printf("if you want exit press %c\n", EXIT_CHAR);
-    printf("if you want to write press %c\n", WRITE_CHAR);
     while(getchar() != EXIT_CHAR)
     {
-        while(getchar() != WRITE_CHAR)
+        int size_receive = mq_receive(chat, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
+        if (size_receive == sizeof(struct_to_receive))
         {
-            if (mq_receive(chat_queue, (char *)&chat_struct, sizeof(chat_struct), NULL) == -1)
-            {
-                perror("not message to receive\n");
-                sleep(1);
-                getchar();
-            }
-            if (chat_struct.pid != struct_to_send.pid)
-            {
-                printf("%s\n", chat_struct.message);
-            }
-
+            printf("%s: %s\n", struct_to_receive.sender.client_name, struct_to_receive.server_to_client_msg);
         }
         printf("Your message:\n");
-        fgets(chat_struct.message, MESSAGE_SIZE - sizeof(NICKNAME_SIZE) - 1, stdin);
-        char user_pid[NICKNAME_SIZE];
-        sprintf(user_pid, "%d", struct_to_send.pid);
-        strcat(user_pid, struct_to_send.nickname);
-        strcat(chat_struct.message, user_pid);
-        printf("sizeof message = %ld\n", sizeof(chat_struct.message));
-        if (mq_send(chat_queue, (char *)&chat_struct, sizeof(chat_struct), PRIORITY_OF_QUEUE) == -1)
+        fgets(struct_to_send.client_to_server_msg, MESSAGE_SIZE, stdin);
+        struct_to_send.action = 2;
+        struct_to_send.sender.client_pid = client_pid;
+        memmove(&struct_to_send.sender.client_name, &nickname, sizeof(struct_to_send.sender.client_name));
+        if (mq_send(queue_to_connect, (char *)&struct_to_send, sizeof(struct_to_send), PRIORITY_OF_QUEUE) == -1)
+        {
+            printf("сообщение не отправилось. Errno = %d\n", errno);
+            mq_unlink(pid_queue_ptr);
+            exit(EXIT_FAILURE);
+        }
+        size_receive = mq_receive(chat, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
+        if (size_receive == sizeof(struct_to_receive))
+        {
+            printf("%s: %s\n", struct_to_receive.sender.client_name, struct_to_receive.server_to_client_msg);
+        }
+    }
+    struct_to_send.action = 1;
+    if (mq_send(queue_to_connect, (char *)&struct_to_send, sizeof(struct_to_send), PRIORITY_OF_QUEUE) == -1)
         {
             perror("mq_send not success\n");
             exit(EXIT_FAILURE);
         }
-    }
 }
 
 
@@ -133,29 +125,11 @@ int main(int argc, char *argv[])
         printf("write just your nickname\ntry again\n");
         return -1;
     }
-    mqd_t queue_to_connect;
+    memmove(&nickname, argv[1], sizeof(nickname));
+    client_pid = getpid();
     queue_to_connect = wait_connect();
-    printf("мой PID = %d, дескриптор очереди = %d\n", getpid(), queue_to_connect);
-    if (connect_info(queue_to_connect, &argv[1]) == -1)
-    {
-        return -1;
-    }
-    else
-    {
-        printf("Я успешно передал connect_info\n");
-    }
-    int name_chat_queue;
-    name_chat_queue = recive_new_fd(queue_to_connect);
-    if (name_chat_queue != -1)
-    {
-        printf("я успешно получил name_chat_queue\n");
-    }
-    mqd_t chat_queue;
-    chat_queue = connect_to_chat(name_chat_queue);
-    if (chat_queue != -1)
-    {
-        printf("Я успешно выполнил connect_to_chat\n");
-    }
-    chat(chat_queue);
+    connect_info();
+    create_new_fd();
+    _chat_();
     return 0;
 }
