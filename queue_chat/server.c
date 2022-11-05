@@ -3,12 +3,11 @@
 #include <mqueue.h>
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#include "header.h"
+#include "define_and_struct.h"
 
 #define WAIT_MESSAGE_TIME 5
 #define NUMBER_OF_USERS 10
@@ -105,11 +104,6 @@ mqd_t create_queue_service()
             case C2S_ACTION_DISCONNECT:
             {
                 printf("case C2S_ACTION_DISCONNECT\n");
-                printf("список пользователей до удаления:\n");
-                for (int i = 1; i < *user_number_ptr; i++)
-                {
-                    printf("%d %s\n", users_db[i].pid, users_db[i].nickname);
-                }
                 for (int i = 1; i < *user_number_ptr; i++)
                 {
                     if (users_db[i].pid == service_struct.sender.client_pid)
@@ -128,6 +122,11 @@ mqd_t create_queue_service()
                         break;
                     }
                 }
+                printf("список пользователей после удаления:\n");
+                for (int i = 1; i < *user_number_ptr; i++)
+                {
+                    printf("%d %s\n", users_db[i].pid, users_db[i].nickname);
+                }
                 break;
             }
 
@@ -135,6 +134,7 @@ mqd_t create_queue_service()
             {
                 strncpy(chat_struct.server_to_client_msg, service_struct.client_to_server_msg, sizeof(chat_struct.server_to_client_msg));
                 strncpy(chat_struct.sender.client_name, service_struct.sender.client_name, sizeof(chat_struct.sender.client_name));
+                chat_struct.sender.client_pid = service_struct.sender.client_pid;
                 for(int i = 1; i < *user_number_ptr; i++)
                 {
                     if (mq_send(chat[i], (char *)&chat_struct, sizeof(chat_struct), PRIORITY_OF_QUEUE) == -1)

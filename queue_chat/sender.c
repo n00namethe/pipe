@@ -6,14 +6,15 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "header.h"
+#include "define_and_struct.h"
 #include <errno.h>
+#include <signal.h>
 
 #define EXIT_CHAR 'e'
 
 server_to_client_msg_t struct_to_receive;
 client_to_server_msg_t struct_to_send;
-struct timespec timeout;
+struct sigevent sigev;
 
 pid_t client_pid;
 char nickname[NICKNAME_SIZE];
@@ -81,18 +82,29 @@ void create_new_fd()
     printf("Подкдючение к очереди произошло успешно, ФД: %d\n", (int)chat);
 }
 
+void sig_receive_message()
+{
+    mq_notify(chat, &sigev);
+    mq_receive(chat, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
+    if (struct_to_receive.sender.client_pid != client_pid)
+    {
+        printf("%s: %s\n", struct_to_receive.sender.client_name, struct_to_receive.server_to_client_msg);
+    }
+    
+}
+
 void _chat_()
 {
     printf("Я зашел в chat\n");
+    signal(SIGUSR1, sig_receive_message);
+    sigev.sigev_notify = SIGEV_SIGNAL;
+    sigev.sigev_signo = SIGUSR1;
+    mq_notify(chat, &sigev);
     printf("if you want exit press %c\n", EXIT_CHAR);
+    printf("Your message:\n");
     while(getchar() != EXIT_CHAR)
     {
-        int size_receive = mq_receive(chat, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
-        if (size_receive == sizeof(struct_to_receive))
-        {
-            printf("%s: %s\n", struct_to_receive.sender.client_name, struct_to_receive.server_to_client_msg);
-        }
-        printf("Your message:\n");
+        printf("Your message: ");
         fgets(struct_to_send.client_to_server_msg, MESSAGE_SIZE, stdin);
         struct_to_send.action = 2;
         struct_to_send.sender.client_pid = client_pid;
@@ -102,11 +114,6 @@ void _chat_()
             printf("сообщение не отправилось. Errno = %d\n", errno);
             mq_unlink(pid_queue_ptr);
             exit(EXIT_FAILURE);
-        }
-        size_receive = mq_receive(chat, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
-        if (size_receive == sizeof(struct_to_receive))
-        {
-            printf("%s: %s\n", struct_to_receive.sender.client_name, struct_to_receive.server_to_client_msg);
         }
     }
     struct_to_send.action = 1;

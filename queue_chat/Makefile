@@ -3,19 +3,19 @@ OBJ = object
 
 .PHONY: all clean
 
-all: sender server_new
+all: sender server
 
 clean:
 	rm -f $(OBJ)/*.o $(BIN)/*
 
 sender.o: sender.c
-	gcc -c -o $(OBJ)/sender.o sender.c -lrt -g
+	gcc -c -o $(OBJ)/sender.o sender.c -lrt
 
-server_new.o: server_new.c
-	gcc -c -o $(OBJ)/server_new.o server_new.c -lrt -g
+server.o: server.c
+	gcc -c -o $(OBJ)/server.o server.c -lrt
 
 sender: sender.o
-	gcc -o $(BIN)/sender $(OBJ)/sender.o -lrt -g
+	gcc -o $(BIN)/sender $(OBJ)/sender.o -lrt
 
-server_new: server_new.o
-	gcc -o $(BIN)/server_new $(OBJ)/server_new.o -lrt -g
+server: server.o
+	gcc -o $(BIN)/server $(OBJ)/server.o -lrt
