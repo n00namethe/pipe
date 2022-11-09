@@ -4,4 +4,5 @@
 /queue_chat/binar
 /queue_chat/object
 /shm
-/shm_sem_chat
+/shm_sem_chat/binar
+/shm_sem_chat/object
