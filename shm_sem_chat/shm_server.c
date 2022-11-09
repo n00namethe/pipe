@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <semaphore.h>
-#include "header.h"
+#include "struct_and_define.h"
 
 #define WAIT_MESSAGE_TIME 5
 #define NUMBER_OF_USERS 10
@@ -46,20 +46,26 @@ int semaphore_value()
 void semaphore_post(const char *asker_func_name)
 {
     printf("%s делает sem_post\n", asker_func_name);
+    printf("значение семафора до %s = %d\n", asker_func_name, semaphore_value());
     sem_post(server_ctx.sem_service);
-    printf("текущее значение семафора после %s = %d\n", asker_func_name, semaphore_value());
 }
 
 void semaphore_wait(const char *asker_func_name)
 {
     printf("%s делает sem_wait\n", asker_func_name);
+    printf("значение семафора до %s = %d\n", asker_func_name, semaphore_value());
     sem_wait(server_ctx.sem_service);
-    printf("текущее значение семафора после %s = %d\n", asker_func_name, semaphore_value());
 }
 
 void my_printf(const char *asker_func_name)
 {
     printf("я зашел в %s\n", asker_func_name);
+}
+
+void memory_free()
+{
+    memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
+    server_ctx.client2server->action = C2S_ACTION_INVALID_TYPE;
 }
 
 void create_shm_service()
@@ -84,7 +90,7 @@ void create_shm_service()
         close(shm_serv);
         exit(EXIT_FAILURE);
     }
-    memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
+    memory_free();
     server_ctx.sem_service = sem_open(SEM, O_RDWR | O_CREAT, S_IRWXU, 0);
     if(server_ctx.sem_service == SEM_FAILED)
     {
@@ -93,7 +99,7 @@ void create_shm_service()
         exit(EXIT_FAILURE);
     }
 }
-int case_connect()
+int user_connect()
 {
     my_printf(__FUNCTION__);
     for (int i = 0; i < NUMBER_OF_USERS; i++)
@@ -101,12 +107,13 @@ int case_connect()
         if (i == NUMBER_OF_USERS - 1)
         {
             printf("Свободных мест нет, количество пользователей = %d\n", NUMBER_OF_USERS);
+            memory_free();
             break;
         }
         else if (users_db[i].pid == 0)
         {
-            users_db[i].pid = server_ctx.client2server -> client_id.client_pid;
-            strncpy(users_db[i].nickname, server_ctx.client2server -> client_id.client_name, sizeof(server_ctx.client2server -> client_id.client_name));
+            users_db[i].pid = server_ctx.client2server->client_id.client_pid;
+            strncpy(users_db[i].nickname, server_ctx.client2server->client_id.client_name, sizeof(server_ctx.client2server->client_id.client_name));
             printf("user[%d].pid = %d\n", i, users_db[i].pid);
             printf("user[%d].nickname = %s\n", i, users_db[i].nickname);
             sprintf(users_db[i].client_queue, "/User_queue_%d", users_db[i].pid);
@@ -120,20 +127,19 @@ int case_connect()
                 return 1;
             }
             printf("chat_queue[%d] создан, FD = %d\n", i, (int)users_db[i].chat_queue);
-            memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
-            semaphore_post(__FUNCTION__);
+            memory_free();
             break;
         }
     }
     return 0;
 }
 
-int case_disconnect()
+int user_disconnect()
 {
     my_printf(__FUNCTION__);
     for (int i = 0; i < NUMBER_OF_USERS; i++)
     {
-        if (users_db[i].pid == server_ctx.client2server -> client_id.client_pid)
+        if (users_db[i].pid == server_ctx.client2server->client_id.client_pid)
         {
             users_db[i].pid = 0;
             strncpy(users_db[i].nickname, "0", sizeof(users_db[i].nickname));
@@ -145,6 +151,7 @@ int case_disconnect()
             {
                 printf("Не получилось unlink очередь chat_queue[%d]. Errno = %d\n", i, errno);
             }
+            memory_free();
             break;
         }
     }
@@ -163,17 +170,16 @@ int case_disconnect()
     {
         return 1;
     }
-    memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
-    semaphore_post(__FUNCTION__);
+    memory_free();
     return 0;
 }
 
-void case_message()
+void send_message_to_client()
 {
     my_printf(__FUNCTION__);
-    strncpy(chat_struct.server_to_client_msg, server_ctx.client2server -> client_to_server_msg, sizeof(server_ctx.client2server -> client_to_server_msg));
-    strncpy(chat_struct.client_id.client_name, server_ctx.client2server -> client_id.client_name, sizeof(server_ctx.client2server -> client_id.client_name));
-    chat_struct.client_id.client_pid = server_ctx.client2server -> client_id.client_pid;
+    strncpy(chat_struct.server_to_client_msg, server_ctx.client2server->client_to_server_msg, sizeof(server_ctx.client2server->client_to_server_msg));
+    strncpy(chat_struct.client_id.client_name, server_ctx.client2server->client_id.client_name, sizeof(server_ctx.client2server->client_id.client_name));
+    chat_struct.client_id.client_pid = server_ctx.client2server->client_id.client_pid;
     for(int i = 0; i < NUMBER_OF_USERS - 1; i++)
     {
         if (users_db[i].pid != 0)
@@ -185,8 +191,7 @@ void case_message()
             }
         }
     }
-    memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
-    semaphore_post(__FUNCTION__);
+    memory_free();
 }
 
 int receive_service_struct()
@@ -194,21 +199,22 @@ int receive_service_struct()
     my_printf(__FUNCTION__);
     while(1)
     {
-        semaphore_wait(__FUNCTION__);
+        semaphore_post(__FUNCTION__);
         /*printf("мой PID = %d\nникнейм = %s\nномер действия = %d\n",
-               server_ctx.client2server -> client_id.client_pid, server_ctx.client2server -> client_id.client_name, server_ctx.client2server -> action);*/
-        if (server_ctx.client2server -> client_id.client_pid == 0)
+               server_ctx.client2server->client_id.client_pid, server_ctx.client2server->client_id.client_name, server_ctx.client2server->action);*/
+        switch(server_ctx.client2server->action)
         {
-            printf("пид клинета = %d, повтор попытки\n", server_ctx.client2server -> client_id.client_pid);
-            sleep(2);
-            continue;
-        }
-        switch(server_ctx.client2server -> action)
-        {
+            case C2S_ACTION_INVALID_TYPE:
+            {
+                sleep(2);
+                semaphore_wait(__FUNCTION__);
+                continue;
+            }
             case C2S_ACTION_CONNECT:
             {
                 printf("case C2S_ACTION_CONNECT\n");
-                if (case_connect() == 1)
+                semaphore_wait(__FUNCTION__);
+                if (user_connect() == 1)
                 {
                     return 0;
                 }
@@ -217,7 +223,8 @@ int receive_service_struct()
             case C2S_ACTION_DISCONNECT:
             {
                 printf("case C2S_ACTION_DISCONNECT\n");
-                if (case_disconnect() == 1)
+                semaphore_wait(__FUNCTION__);
+                if (user_disconnect() == 1)
                 {
                     return 0;
                 }
@@ -226,13 +233,15 @@ int receive_service_struct()
             case C2S_ACTION_MESSAGE:
             { 
                 printf("case C2S_ACTION_MESSAGE\n");
-                case_message();
+                semaphore_wait(__FUNCTION__);
+                send_message_to_client();
                 break;
             }
             default:
             {
-                printf("Получен неопознанный тип события. %d\n", server_ctx.client2server -> action);
-                memset(server_ctx.client2server , 0 , sizeof(client_to_server_msg_t));
+                printf("Получен неопознанный тип события. %d\n", server_ctx.client2server->action);
+                semaphore_wait(__FUNCTION__);
+                memory_free();
                 semaphore_post(__FUNCTION__);
                 break;
             }
@@ -255,5 +264,10 @@ int main()
         perror("shm_unlink SERVICE_SHM not success\n");
         return -1;
     }
+    munmap(server_ctx.client2server, sizeof(client_to_server_msg_t));
+    sem_close(server_ctx.sem_service);
+    sem_unlink(SEM);
+    shm_unlink(SERVICE_SHM);
+
     return 0;
 }

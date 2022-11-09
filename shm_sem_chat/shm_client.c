@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "header.h"
+#include "struct_and_define.h"
 #include <errno.h>
 #include <semaphore.h>
 #include <signal.h>
@@ -41,15 +41,15 @@ int semaphore_value()
 void semaphore_post(const char *asker_func_name)
 {
     printf("%s делает sem_post\n", asker_func_name);
+    printf("значение семафора до %s = %d\n", asker_func_name, semaphore_value());
     sem_post(client_ctx.sem_service);
-    printf("текущее значение семафора после %s = %d\n", asker_func_name, semaphore_value());
 }
 
 void semaphore_wait(const char *asker_func_name)
 {
     printf("%s делает sem_wait\n", asker_func_name);
+    printf("значение семафора до %s = %d\n", asker_func_name, semaphore_value());
     sem_wait(client_ctx.sem_service);
-    printf("текущее значение семафора после %s = %d\n", asker_func_name, semaphore_value());
 }
 
 void check_memory_free_for_sem_wait()
@@ -57,7 +57,7 @@ void check_memory_free_for_sem_wait()
     while(1)
     {
         semaphore_wait(__FUNCTION__);
-        if (client_ctx.client2server_msg -> client_id.client_pid != 0)
+        if (client_ctx.client2server_msg->action != C2S_ACTION_INVALID_TYPE)
         {
             printf("память не высвобождена, иди своей дорогой\n");
             semaphore_post(__FUNCTION__);
@@ -133,12 +133,12 @@ int connect_info()
 {
     my_printf(__FUNCTION__);
     check_memory_free_for_sem_wait();
-    client_ctx.client2server_msg -> action = C2S_ACTION_CONNECT;
-    client_ctx.client2server_msg -> client_id.client_pid = client_ctx.client_id.client_pid;
-    sprintf(client_ctx.client2server_msg -> client_id.client_name, "%s", client_ctx.client_id.client_name);
+    client_ctx.client2server_msg->action = C2S_ACTION_CONNECT;
+    client_ctx.client2server_msg->client_id.client_pid = client_ctx.client_id.client_pid;
+    sprintf(client_ctx.client2server_msg->client_id.client_name, "%s", client_ctx.client_id.client_name);
     semaphore_post(__FUNCTION__);
     printf("мой PID = %d\nникнейм = %s\nномер действия = %d\n", \
-           client_ctx.client_id.client_pid, client_ctx.client_id.client_name, client_ctx.client2server_msg -> action);
+           client_ctx.client_id.client_pid, client_ctx.client_id.client_name, client_ctx.client2server_msg->action);
     return 1;
 }
 
@@ -164,7 +164,6 @@ void create_new_fd()
 
 void sig_receive_message()
 {
-    my_printf(__FUNCTION__);
     server_to_client_msg_t struct_to_receive = {0};
     mq_notify(client_ctx.chat_queue, &sigev);
     mq_receive(client_ctx.chat_queue, (char *)&struct_to_receive, sizeof(struct_to_receive), NULL);
@@ -181,8 +180,8 @@ void disconnect()
     while(1)
     {
         check_memory_free_for_sem_wait();
-        client_ctx.client2server_msg -> client_id.client_pid = client_ctx.client_id.client_pid;
-        client_ctx.client2server_msg -> action = C2S_ACTION_DISCONNECT;
+        client_ctx.client2server_msg->client_id.client_pid = client_ctx.client_id.client_pid;
+        client_ctx.client2server_msg->action = C2S_ACTION_DISCONNECT;
         semaphore_post(__FUNCTION__);
         break;
     }
@@ -196,11 +195,10 @@ void send_message_to_chat()
     while(getchar() != EXIT_CHAR)
     {
         check_memory_free_for_sem_wait();
-        printf("Your message: ");
-        fgets(client_ctx.client2server_msg -> client_to_server_msg, MESSAGE_SIZE, stdin);
-        client_ctx.client2server_msg -> action = C2S_ACTION_MESSAGE;
-        client_ctx.client2server_msg -> client_id.client_pid = client_ctx.client_id.client_pid;
-        sprintf(client_ctx.client2server_msg -> client_id.client_name, "%s", client_ctx.client_id.client_name);
+        fgets(client_ctx.client2server_msg->client_to_server_msg, MESSAGE_SIZE, stdin);
+        client_ctx.client2server_msg->action = C2S_ACTION_MESSAGE;
+        client_ctx.client2server_msg->client_id.client_pid = client_ctx.client_id.client_pid;
+        sprintf(client_ctx.client2server_msg->client_id.client_name, "%s", client_ctx.client_id.client_name);
         semaphore_post(__FUNCTION__);
     }
 }
