@@ -13,18 +13,16 @@
 #define NUMBER_OF_USERS 10
 
 mqd_t serv_queue;
-mqd_t chat_queue[NUMBER_OF_USERS];
 
 client_to_server_msg_t service_struct;
 server_to_client_msg_t chat_struct;
-struct timespec timeout;
 typedef struct _client_t
 {
     pid_t pid;
     char nickname[NICKNAME_SIZE];
     char client_queue[CLIENT_QUEUE_SIZE];
+    mqd_t chat_queue;
 } client_t;
-
 client_t users_db[NUMBER_OF_USERS] = {0};
 
 int create_queue_service()
@@ -60,15 +58,15 @@ int case_connect()
 
             printf("users_db[%d].client_queue = %s\n", i, users_db[i].client_queue);
 
-            chat_queue[i] = mq_open(users_db[i].client_queue, O_CREAT | O_NONBLOCK | O_RDWR, S_IRUSR | S_IWUSR, &attributes_from_server_client);
-            if (chat_queue[i] == -1)
+            users_db[i].chat_queue = mq_open(users_db[i].client_queue, O_CREAT | O_NONBLOCK | O_RDWR, S_IRUSR | S_IWUSR, &attributes_from_server_client);
+            if (users_db[i].chat_queue == -1)
             {
                 printf("error = %d\n", errno);
                 mq_close(serv_queue);
                 mq_unlink(SERVICE_QUEUE);
                 return 1;
             }
-            printf("chat_queue[%d] создан, FD = %d\n", i, (int)chat_queue[i]);
+            printf("chat_queue[%d] создан, FD = %d\n", i, (int)users_db[i].chat_queue);
             break;
         }
     }
@@ -83,7 +81,7 @@ int case_disconnect()
         {
             users_db[i].pid = 0;
             strncpy(users_db[i].nickname, "0", sizeof(users_db[i].nickname));
-            if (mq_close(chat_queue[i]) == -1)
+            if (mq_close(users_db[i].chat_queue) == -1)
             {
                 printf("Не получилось закрыть очередь chat_queue[%d]. Errno = %d\n", i, errno);
             }
@@ -131,9 +129,6 @@ int receive_service_struct()
             sleep(3);
             continue;
         }
-        /*printf("nickname = %s\npid = %d\naction = %d\n",\
-                service_struct.sender.client_name, service_struct.sender.client_pid, service_struct.action);*/
-
         switch(service_struct.action)
         {
             case C2S_ACTION_CONNECT:
@@ -164,7 +159,7 @@ int receive_service_struct()
                 {
                     if (users_db[i].pid != 0)
                     {
-                        if (mq_send(chat_queue[i], (char *)&chat_struct, sizeof(chat_struct), PRIORITY_OF_QUEUE) == -1)
+                        if (mq_send(users_db[i].chat_queue, (char *)&chat_struct, sizeof(chat_struct), PRIORITY_OF_QUEUE) == -1)
                         {
                             printf("отправить сообщение пользователю users_db[%d].client_queue не удалось. Errno = %d\n", i, errno);
                             break;

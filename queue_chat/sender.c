@@ -12,6 +12,7 @@
 
 #define EXIT_CHAR 'e'
 #define NUMBER_OF_ARGUMENTS 2
+//test
 
 server_to_client_msg_t struct_to_receive = {0};
 client_to_server_msg_t struct_to_send = {0};
@@ -21,7 +22,6 @@ pid_t client_pid;
 char nickname[NICKNAME_SIZE];
 char client_name_queue_for_chat[CLIENT_QUEUE_SIZE];
 char client_pid_queue_for_chat[CLIENT_QUEUE_SIZE];
-//char *pid_queue_ptr = &client_pid_queue_for_chat[0];
 
 mqd_t service_queue = -1;
 mqd_t chat_queue = -1;
@@ -104,7 +104,6 @@ void chat()
     printf("Your message:\n");
     while(getchar() != EXIT_CHAR)
     {
-        //printf("Your message: ");
         fgets(struct_to_send.client_to_server_msg, MESSAGE_SIZE, stdin);
         struct_to_send.action = C2S_ACTION_MESSAGE;
         struct_to_send.sender.client_pid = client_pid;
